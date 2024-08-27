@@ -164,7 +164,7 @@ def finnPerson(typeSok, sokeTekst):
 
 def slettPerson():
     console_clear()
-    fornavn_slett = input("Skriv fornavnet ti personen du ønsker å slette (eller skriv 'meny' for å gå tilbake): ")
+    fornavn_slett = input("Skriv fornavnet til personen du ønsker å slette (eller skriv 'meny' for å gå tilbake): ")
     if fornavn_slett == "meny" or fornavn_slett == "MENY" or fornavn_slett == "Meny":
         printMeny()
     etternavn_slett = input("Skriv etternavnet til personen du ønsker å slette: ")
