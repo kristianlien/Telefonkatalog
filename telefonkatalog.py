@@ -1,28 +1,31 @@
 import os
 import time
 import msvcrt
+import sqlite3
 
-telefonkatalog = []  # listeformat ["fornavn", "etternavn", "telefonnummer"]
-fil = "telefondat.txt"
+# Initialize SQLite connection
+conn = sqlite3.connect("telefonkatalog.db")
+cursor = conn.cursor()
+
+# Database initialization
+def db_init():
+    cursor.execute('''CREATE TABLE IF NOT EXISTS personer (
+                fornavn TEXT,
+                etternavn TEXT,
+                telefonnummer TEXT
+            )''')
+    conn.commit()
+
+db_init()
+
+# Utility functions
+def trykk_tast_for_meny():
+    print("Trykk på en tast for å gå tilbake til menyen")
+    get_keypress()
+    printMeny()
 
 def get_keypress():
     return msvcrt.getch().decode('utf-8')
-
-def hent_personer_fra_fil(filnavn):
-    if not os.path.exists(filnavn):
-        return
-    with open(filnavn, 'r') as fil:
-        for linje in fil:
-            person = linje.strip().split("-")
-            if len(person) == 3:  # Ensure the format is correct
-                telefonkatalog.append(person)
-
-hent_personer_fra_fil(fil)
-
-def skriv_til_fil(filnavn):
-    with open(filnavn, "w") as txt_file:
-        for line in telefonkatalog:
-            txt_file.write("-".join(line) + "\n")
 
 def console_clear():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -55,7 +58,7 @@ def utfoerMenyvalg(valgtTall):
     elif valgtTall == "6":
         bekreftelse = input("Er du sikker på at du vil avslutte? J/N ")
         if bekreftelse.lower() == "j":
-            skriv_til_fil(fil)
+            conn.close()
             exit()
         else:
             printMeny()
@@ -63,136 +66,233 @@ def utfoerMenyvalg(valgtTall):
         print("Ugyldig valg. Velg et tall mellom 1-5: ")
         utfoerMenyvalg(input())
 
-def endrePerson():
+# Database interaction functions
+def db_add(fornavn, etternavn, tlf):
+    cursor.execute("INSERT INTO personer (fornavn, etternavn, telefonnummer) VALUES (?, ?, ?) ",
+                   (fornavn, etternavn, tlf))
+    conn.commit()
+
+def db_delete(fornavn, etternavn, tlf):
+    cursor.execute("DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+                   (fornavn, etternavn, tlf))
+    conn.commit()
+
+def oneResult_changeEntry(results, fornavn_endre, etternavn_endre):
     console_clear()
-    fornavn_endre = input("Skriv fornavnet til personen du ønsker å endre (eller skriv 'meny' for å gå tilbake): ")
-    if fornavn_endre == "meny" or fornavn_endre == "MENY" or fornavn_endre == "Meny":
-        printMeny()
-    etternavn_endre = input("Skriv etternavnet til personen du ønsker å endre: ")
-    for person in telefonkatalog:
-        if person[0] == fornavn_endre:
-            if person[1] == etternavn_endre:
-                console_clear()
-                print("Fant", person[0], person[1], "med telefonnummer", person[2])
-                nytt_fornavn = input("Skriv nytt fornavn: ").strip()
-                nytt_etternavn = input("Skriv nytt etternavn: ").strip()
-                nytt_tlf = input("skriv nytt telefonnummer: ").strip()
-                telefonkatalog.remove(person)
-                ny_registrering = [nytt_fornavn, nytt_etternavn, nytt_tlf]
-                telefonkatalog.append(ny_registrering)
-                print(fornavn_endre, etternavn_endre, "er nå registrert som", nytt_fornavn, nytt_etternavn, "med telefonnummer", nytt_tlf)
-                print("Trykk på en tast for å gå tilbake")
-                get_keypress()
-                printMeny()
-            else:
-                break
+    print(f"Fant {results[0][0]} {results[0][1]} med telefonnummer {results[0][2]}. Hva ønsker du å endre?")
+    print("(1: Navn, 2: Telefonnummer, 3: Begge, 4: Tilbake)")
+    endring = get_keypress()
+
+    if endring == "1":
+        nytt_fornavn = input("Skriv nytt fornavn: ")
+        nytt_etternavn = input("Skriv nytt etternavn: ")
+        cursor.execute("UPDATE personer SET fornavn=?, etternavn=? WHERE fornavn=? AND etternavn=?",
+                       (nytt_fornavn, nytt_etternavn, fornavn_endre, etternavn_endre))
+        conn.commit()
+        print(f"{fornavn_endre} {etternavn_endre} heter nå {nytt_fornavn} {nytt_etternavn}")
+        trykk_tast_for_meny()
+
+    elif endring == "2":
+        nytt_tlf = input("Skriv nytt telefonnummer: ")
+        cursor.execute("UPDATE personer SET telefonnummer=? WHERE fornavn=? AND etternavn=?",
+                       (nytt_tlf, fornavn_endre, etternavn_endre))
+        conn.commit()
+        print(f"{fornavn_endre} {etternavn_endre} har nå telefonnummer {nytt_tlf}")
+        trykk_tast_for_meny()
+
+    elif endring == "3":
+        nytt_fornavn = input("Skriv nytt fornavn: ")
+        nytt_etternavn = input("Skriv nytt etternavn: ")
+        nytt_tlf = input("Skriv nytt telefonnummer: ")
+        cursor.execute("UPDATE personer SET fornavn=?, etternavn=?, telefonnummer=? WHERE fornavn=? AND etternavn=?",
+                       (nytt_fornavn, nytt_etternavn, nytt_tlf, fornavn_endre, etternavn_endre))
+        conn.commit()
+        print(f"{fornavn_endre} {etternavn_endre} heter nå {nytt_fornavn} {nytt_etternavn}, og har telefonnummer {nytt_tlf}")
+        trykk_tast_for_meny()
+
+    elif endring == "4":
+        endrePerson()
+
+    else:
+        print("Skriv 1, 2 eller 3")
+        time.sleep(1)
+        oneResult_changeEntry(results, fornavn_endre, etternavn_endre)
+
+def multiResult_changeEntry(results):
+    print("Flere personer funnet:")
+    for index, person in enumerate(results, start=1):
+        print(f"{index}. {person[0]} {person[1]} - Telefon: {person[2]}")
+
+    selection = int(input("Skriv nummeret til personen du ønsker å endre (skriv 0 for å gå tilbake): "))
+
+    if selection == 0:
+        endrePerson()
+
+    if 1 <= selection <= len(results):
+        selected_entry = results[selection - 1]
+        nytt_fornavn = input("Skriv inn det nye fornavnet: ")
+        nytt_etternavn = input("Skriv inn det nye etternavnet: ")
+        nytt_tlf = input("Skriv inn det nye telefonnummeret: ")
+
+        cursor.execute(
+            "UPDATE personer SET fornavn=?, etternavn=?, telefonnummer=? WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+            (nytt_fornavn, nytt_etternavn, nytt_tlf, selected_entry[0], selected_entry[1], selected_entry[2])
+        )
+        conn.commit()
+        print(" ")
+        print(f"{selected_entry[0]} {selected_entry[1]} heter nå {nytt_fornavn} {nytt_etternavn}")
+        trykk_tast_for_meny()
+    else:
+        print("Nummeret du skrev er ugyldig. Prøv igjen.")
+        time.sleep(1)
+        multiResult_changeEntry(results)
+
+def oneResult_deleteEntry(results, fornavn_slett, etternavn_slett):
+    console_clear()
+    print(f"Fant {results[0][0]} {results[0][1]} med telefonnummer {results[0][2]}. Ønsker du å slette {results[0][0]}? (J/N)")
+    endring = input()
+
+    if endring.lower() == "j":
+        cursor.execute("DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+                       (fornavn_slett, etternavn_slett, results[0][2]))
+        conn.commit()
+        print(f"{fornavn_slett} {etternavn_slett} er slettet.")
+        trykk_tast_for_meny()
+
+    elif endring.lower() == "n":
+        slettPerson()
+
+    else:
+        print("Skriv J/N")
+        time.sleep(1)
+        oneResult_deleteEntry(results, fornavn_slett, etternavn_slett)
+
+def multiResult_deleteEntry(results):
+    print("Flere personer funnet:")
+    for index, person in enumerate(results, start=1):
+        print(f"{index}. {person[0]} {person[1]} - Telefon: {person[2]}")
+
+    selection = int(input("Skriv nummeret til personen du ønsker å slette: (skriv '0' for å gå tilbake) "))
+
+    if selection == 0:
+        slettPerson()
+
+    elif 1 <= selection <= len(results):
+        selected_entry = results[selection - 1]
+        print(f"Er du sikker du ønsker å slette {selected_entry[0]} {selected_entry[1]} med telefonnummer {selected_entry[2]}? (J/N)")
+        endring = get_keypress()
+
+        if endring.lower() == "j":
+            cursor.execute(
+                "DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+                (selected_entry[0], selected_entry[1], selected_entry[2])
+            )    
+            conn.commit()
+            print("Personopplysningene har blitt oppdatert.")
+            trykk_tast_for_meny()
         else:
-            continue
-    print("Fant ikke", fornavn_endre, etternavn_endre)
-    time.sleep(1)
-    endrePerson()
-    
+            print("Nummeret du skrev er ugyldig. Prøv igjen.")
+            time.sleep(1)
+            multiResult_deleteEntry(results)
 
 def registrerPerson():
     console_clear()
     fornavn = input("Skriv inn fornavn: ").strip()
     etternavn = input("Skriv inn etternavn: ").strip()
     telefonnummer = input("Skriv inn telefonnummer: ").strip()
+    db_add(fornavn, etternavn, telefonnummer)
 
-    nyRegistrering = [fornavn, etternavn, telefonnummer]
-    telefonkatalog.append(nyRegistrering)
     console_clear()
-    print("{0} {1} er registrert med telefonnummer {2}"
-          .format(fornavn, etternavn, telefonnummer))
+    print(f"{fornavn} {etternavn} er registrert med telefonnummer {telefonnummer}")
     time.sleep(2)
     printMeny()
 
-def visAllePersoner():
-    console_clear()
-    if not telefonkatalog:
-        print("Det er ingen registrerte personer i katalogen")
-    else:
-        print("***************************************")
-        for personer in telefonkatalog:
-            print("* Fornavn: {:15s} Etternavn: {:15s} Telefonnummer: {:8s}"
-                  .format(personer[0], personer[1], personer[2]))
-        print("***************************************")
-        print("Trykk på en tast for å gå tilbake")
-        get_keypress()
-        printMeny()
-
 def sokPerson():
     console_clear()
-    if not telefonkatalog:
-        print("Det er ingen registrerte personer i katalogen")
-    else:
-        print("1. Søk på fornavn")
-        print("2. Søk på etternavn")
-        print("3. Søk på telefonnummer")
-        print("4. Tilbake til hovedmeny")
-        sokefelt = input("Velg ønsket søk 1-3, eller 4 for å gå tilbake: ").strip()
-        if sokefelt == "1":
-            navn = input("Fornavn: ").strip()
-            finnPerson("fornavn", navn)
-        elif sokefelt == "2":
-            navn = input("Etternavn: ").strip()
-            finnPerson("etternavn", navn)
-        elif sokefelt == "3":
-            tlfnummer = input("Telefonnummer: ").strip()
-            finnPerson("telefonnummer", tlfnummer)
-        elif sokefelt == "4":
-            printMeny()
-        else:
-            console_clear()
-            print("Ugyldig valg. Velg et tall mellom 1-4: ")
-            sokPerson()
+    print("Søk i telefonkatalogen")
 
-def finnPerson(typeSok, sokeTekst):
-    found = False
-    for personer in telefonkatalog:
-        if (typeSok == "fornavn" and personer[0] == sokeTekst) or \
-           (typeSok == "etternavn" and personer[1] == sokeTekst) or \
-           (typeSok == "telefonnummer" and personer[2] == sokeTekst):
-            print("{0} {1} har telefonnummer {2}"
-                  .format(personer[0], personer[1], personer[2]))
-            found = True
-    if not found:
-        print("Ingen personer funnet.")
-    print("Trykk på en tast for å gå tilbake til søkemenyen")
-    get_keypress()
-    sokPerson()
+    search_type = input("Ønsker du å søke etter navn (N) eller telefonnummer (T)? ").strip().lower()
+
+    if search_type == "n":
+        fornavn_sok = input("Skriv inn fornavn: ").strip()
+        etternavn_sok = input("Skriv inn etternavn: ").strip()
+
+        # Use SQL parameters to avoid SQL injection
+        cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_sok, etternavn_sok))
+        results = cursor.fetchall()
+
+    elif search_type == "t":
+        tlf_sok = input("Skriv inn telefonnummer: ").strip()
+        cursor.execute("SELECT * FROM personer WHERE telefonnummer=?", (tlf_sok,))
+        results = cursor.fetchall()
+
+    else:
+        print("Ugyldig valg. Velg 'N' eller 'T'.")
+        time.sleep(1)
+        sokPerson()
+
+    if len(results) == 1:
+        print(f"Fant en person: {results[0][0]} {results[0][1]} - Telefon: {results[0][2]}")
+        time.sleep(2)
+    elif len(results) > 1:
+        print(f"Fant {len(results)} personer:")
+        for result in results:
+            print(f"{result[0]} {result[1]} - Telefon: {result[2]}")
+        time.sleep(2)
+    else:
+        print("Ingen resultater funnet.")
+        time.sleep(2)
+
+def visAllePersoner():
+    console_clear()
+    print("Alle registrerte personer:")
+    cursor.execute("SELECT fornavn, etternavn, telefonnummer FROM personer")
+    personer = cursor.fetchall()
+
+    if personer:
+        for person in personer:
+            print(f"{person[0]} {person[1]} - Telefon: {person[2]}")
+    else:
+        print("Ingen personer registrert i katalogen.")
+
+    print("")
+    trykk_tast_for_meny()
 
 def slettPerson():
     console_clear()
-    fornavn_slett = input("Skriv fornavnet til personen du ønsker å slette (eller skriv 'meny' for å gå tilbake): ")
-    if fornavn_slett == "meny" or fornavn_slett == "MENY" or fornavn_slett == "Meny":
+    print("Slett en person fra telefonkatalogen")
+    fornavn_slett = input("Skriv inn fornavn: ").strip()
+    etternavn_slett = input("Skriv inn etternavn: ").strip()
+
+    cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_slett, etternavn_slett))
+    results = cursor.fetchall()
+
+    if len(results) == 1:
+        oneResult_deleteEntry(results, fornavn_slett, etternavn_slett)
+    elif len(results) > 1:
+        multiResult_deleteEntry(results)
+    else:
+        print("Ingen personer funnet med dette navnet.")
+        trykk_tast_for_meny()
+
+def endrePerson():
+    console_clear()
+    print("Endre en person i telefonkatalogen")
+    fornavn_endre = input("Skriv inn fornavn (skriv 'meny' for å gå tilbake): ").strip()
+    if fornavn_endre == "meny" or fornavn_endre == "MENY":
         printMeny()
-    etternavn_slett = input("Skriv etternavnet til personen du ønsker å slette: ")
-    for person in telefonkatalog:
-        if person[0] == fornavn_slett:
-            if person[1] == etternavn_slett:
-                console_clear()
-                confirmation = input("Vil du slette {0} {1} med telefonnummer {2} (J/N)?"
-                                     .format(person[0], person[1], person[2]))
-                if confirmation == "J" or confirmation == "j":
-                    telefonkatalog.remove(person)
-                    console_clear()
-                    print(fornavn_slett, "er slettet")
-                    time.sleep(1)
-                    printMeny()
-                else:
-                    print("Operasjon avbrutt")
-                    time.sleep(1.5)
-                    printMeny()
-            else:
-                break
-        else:
-            continue
-    print("Fant ikke", fornavn_slett, etternavn_slett)
-    time.sleep(1)
-    slettPerson()
+    etternavn_endre = input("Skriv inn etternavn: ").strip()
 
+    cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_endre, etternavn_endre))
+    results = cursor.fetchall()
 
-    
+    if len(results) == 1:
+        oneResult_changeEntry(results, fornavn_endre, etternavn_endre)
+    elif len(results) > 1:
+        multiResult_changeEntry(results)
+    else:
+        print("Ingen personer funnet med dette navnet.")
+        trykk_tast_for_meny()
 
-printMeny()  # Starter programmet ved å skrive menyen første gang
+# Start the program
+printMeny()
