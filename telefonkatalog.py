@@ -294,5 +294,5 @@ def endrePerson():
         print("Ingen personer funnet med dette navnet.")
         trykk_tast_for_meny()
 
-# Start the program
+# Start program
 printMeny()
