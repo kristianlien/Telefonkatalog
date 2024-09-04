@@ -1,18 +1,23 @@
 import os
 import time
 import msvcrt
-import sqlite3
+import mysql.connector
 
-# Initialize SQLite connection
-conn = sqlite3.connect("telefonkatalog.db")
+# Initialize MySQL connection
+conn = mysql.connector.connect(
+    host="10.2.2.172",
+    user="username",
+    password="password",
+    database="telefonkatalog"
+)
 cursor = conn.cursor()
 
 # Database initialization
 def db_init():
     cursor.execute('''CREATE TABLE IF NOT EXISTS personer (
-                fornavn TEXT,
-                etternavn TEXT,
-                telefonnummer TEXT
+                fornavn VARCHAR(255),
+                etternavn VARCHAR(255),
+                telefonnummer VARCHAR(20)
             )''')
     conn.commit()
 
@@ -68,12 +73,12 @@ def utfoerMenyvalg(valgtTall):
 
 # Database interaction functions
 def db_add(fornavn, etternavn, tlf):
-    cursor.execute("INSERT INTO personer (fornavn, etternavn, telefonnummer) VALUES (?, ?, ?) ",
+    cursor.execute("INSERT INTO personer (fornavn, etternavn, telefonnummer) VALUES (%s, %s, %s)",
                    (fornavn, etternavn, tlf))
     conn.commit()
 
 def db_delete(fornavn, etternavn, tlf):
-    cursor.execute("DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+    cursor.execute("DELETE FROM personer WHERE fornavn=%s AND etternavn=%s AND telefonnummer=%s",
                    (fornavn, etternavn, tlf))
     conn.commit()
 
@@ -86,7 +91,7 @@ def oneResult_changeEntry(results, fornavn_endre, etternavn_endre):
     if endring == "1":
         nytt_fornavn = input("Skriv nytt fornavn: ")
         nytt_etternavn = input("Skriv nytt etternavn: ")
-        cursor.execute("UPDATE personer SET fornavn=?, etternavn=? WHERE fornavn=? AND etternavn=?",
+        cursor.execute("UPDATE personer SET fornavn=%s, etternavn=%s WHERE fornavn=%s AND etternavn=%s",
                        (nytt_fornavn, nytt_etternavn, fornavn_endre, etternavn_endre))
         conn.commit()
         print(f"{fornavn_endre} {etternavn_endre} heter nå {nytt_fornavn} {nytt_etternavn}")
@@ -94,7 +99,7 @@ def oneResult_changeEntry(results, fornavn_endre, etternavn_endre):
 
     elif endring == "2":
         nytt_tlf = input("Skriv nytt telefonnummer: ")
-        cursor.execute("UPDATE personer SET telefonnummer=? WHERE fornavn=? AND etternavn=?",
+        cursor.execute("UPDATE personer SET telefonnummer=%s WHERE fornavn=%s AND etternavn=%s",
                        (nytt_tlf, fornavn_endre, etternavn_endre))
         conn.commit()
         print(f"{fornavn_endre} {etternavn_endre} har nå telefonnummer {nytt_tlf}")
@@ -104,7 +109,7 @@ def oneResult_changeEntry(results, fornavn_endre, etternavn_endre):
         nytt_fornavn = input("Skriv nytt fornavn: ")
         nytt_etternavn = input("Skriv nytt etternavn: ")
         nytt_tlf = input("Skriv nytt telefonnummer: ")
-        cursor.execute("UPDATE personer SET fornavn=?, etternavn=?, telefonnummer=? WHERE fornavn=? AND etternavn=?",
+        cursor.execute("UPDATE personer SET fornavn=%s, etternavn=%s, telefonnummer=%s WHERE fornavn=%s AND etternavn=%s",
                        (nytt_fornavn, nytt_etternavn, nytt_tlf, fornavn_endre, etternavn_endre))
         conn.commit()
         print(f"{fornavn_endre} {etternavn_endre} heter nå {nytt_fornavn} {nytt_etternavn}, og har telefonnummer {nytt_tlf}")
@@ -135,11 +140,10 @@ def multiResult_changeEntry(results):
         nytt_tlf = input("Skriv inn det nye telefonnummeret: ")
 
         cursor.execute(
-            "UPDATE personer SET fornavn=?, etternavn=?, telefonnummer=? WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+            "UPDATE personer SET fornavn=%s, etternavn=%s, telefonnummer=%s WHERE fornavn=%s AND etternavn=%s AND telefonnummer=%s",
             (nytt_fornavn, nytt_etternavn, nytt_tlf, selected_entry[0], selected_entry[1], selected_entry[2])
         )
         conn.commit()
-        print(" ")
         print(f"{selected_entry[0]} {selected_entry[1]} heter nå {nytt_fornavn} {nytt_etternavn}")
         trykk_tast_for_meny()
     else:
@@ -153,7 +157,7 @@ def oneResult_deleteEntry(results, fornavn_slett, etternavn_slett):
     endring = input()
 
     if endring.lower() == "j":
-        cursor.execute("DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+        cursor.execute("DELETE FROM personer WHERE fornavn=%s AND etternavn=%s AND telefonnummer=%s",
                        (fornavn_slett, etternavn_slett, results[0][2]))
         conn.commit()
         print(f"{fornavn_slett} {etternavn_slett} er slettet.")
@@ -184,115 +188,84 @@ def multiResult_deleteEntry(results):
 
         if endring.lower() == "j":
             cursor.execute(
-                "DELETE FROM personer WHERE fornavn=? AND etternavn=? AND telefonnummer=?",
+                "DELETE FROM personer WHERE fornavn=%s AND etternavn=%s AND telefonnummer=%s",
                 (selected_entry[0], selected_entry[1], selected_entry[2])
-            )    
+            )
             conn.commit()
-            print("Personopplysningene har blitt oppdatert.")
+            print("Personen har blitt slettet.")
             trykk_tast_for_meny()
         else:
-            print("Nummeret du skrev er ugyldig. Prøv igjen.")
-            time.sleep(1)
-            multiResult_deleteEntry(results)
+            slettPerson()
+    else:
+        print("Nummeret du skrev er ugyldig. Prøv igjen.")
+        time.sleep(1)
+        multiResult_deleteEntry(results)
 
+# Menu option functions
 def registrerPerson():
-    console_clear()
-    fornavn = input("Skriv inn fornavn: ").strip()
-    etternavn = input("Skriv inn etternavn: ").strip()
-    telefonnummer = input("Skriv inn telefonnummer: ").strip()
-    db_add(fornavn, etternavn, telefonnummer)
+    fornavn = input("Fornavn: ")
+    etternavn = input("Etternavn: ")
+    tlf = input("Telefonnummer: ")
 
-    console_clear()
-    print(f"{fornavn} {etternavn} er registrert med telefonnummer {telefonnummer}")
-    time.sleep(2)
-    printMeny()
+    db_add(fornavn, etternavn, tlf)
+    print(f"Ny person lagt til: {fornavn} {etternavn} med telefonnummer {tlf}")
+    trykk_tast_for_meny()
 
 def sokPerson():
-    console_clear()
-    print("Søk i telefonkatalogen")
-
-    search_type = input("Ønsker du å søke etter navn (N) eller telefonnummer (T)? ").strip().lower()
-
-    if search_type == "n":
-        fornavn_sok = input("Skriv inn fornavn: ").strip()
-        etternavn_sok = input("Skriv inn etternavn: ").strip()
-
-        # Use SQL parameters to avoid SQL injection
-        cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_sok, etternavn_sok))
-        results = cursor.fetchall()
-
-    elif search_type == "t":
-        tlf_sok = input("Skriv inn telefonnummer: ").strip()
-        cursor.execute("SELECT * FROM personer WHERE telefonnummer=?", (tlf_sok,))
-        results = cursor.fetchall()
-
-    else:
-        print("Ugyldig valg. Velg 'N' eller 'T'.")
-        time.sleep(1)
-        sokPerson()
-
-    if len(results) == 1:
-        print(f"Fant en person: {results[0][0]} {results[0][1]} - Telefon: {results[0][2]}")
-        time.sleep(2)
-    elif len(results) > 1:
-        print(f"Fant {len(results)} personer:")
-        for result in results:
-            print(f"{result[0]} {result[1]} - Telefon: {result[2]}")
-        time.sleep(2)
-    else:
-        print("Ingen resultater funnet.")
-        time.sleep(2)
-
-def visAllePersoner():
-    console_clear()
-    print("Alle registrerte personer:")
-    cursor.execute("SELECT fornavn, etternavn, telefonnummer FROM personer")
-    personer = cursor.fetchall()
-
-    if personer:
-        for person in personer:
+    sok_fornavn = input("Skriv fornavn på personen du vil søke opp: ")
+    sok_etternavn = input("Skriv etternavn på personen du vil søke opp: ")
+    cursor.execute("SELECT * FROM personer WHERE fornavn=%s AND etternavn=%s", (sok_fornavn, sok_etternavn))
+    result = cursor.fetchall()
+    
+    if result:
+        print("Fant følgende personer:")
+        for person in result:
             print(f"{person[0]} {person[1]} - Telefon: {person[2]}")
     else:
-        print("Ingen personer registrert i katalogen.")
+        print("Fant ingen personer med det navnet.")
 
-    print("")
+    trykk_tast_for_meny()
+
+def visAllePersoner():
+    cursor.execute("SELECT * FROM personer")
+    results = cursor.fetchall()
+
+    if results:
+        print("Alle personer i katalogen:")
+        for person in results:
+            print(f"{person[0]} {person[1]} - Telefon: {person[2]}")
+    else:
+        print("Ingen personer funnet i katalogen.")
+
     trykk_tast_for_meny()
 
 def slettPerson():
-    console_clear()
-    print("Slett en person fra telefonkatalogen")
-    fornavn_slett = input("Skriv inn fornavn: ").strip()
-    etternavn_slett = input("Skriv inn etternavn: ").strip()
-
-    cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_slett, etternavn_slett))
+    slett_fornavn = input("Skriv fornavn på personen du vil slette: ")
+    slett_etternavn = input("Skriv etternavn på personen du vil slette: ")
+    cursor.execute("SELECT * FROM personer WHERE fornavn=%s AND etternavn=%s", (slett_fornavn, slett_etternavn))
     results = cursor.fetchall()
 
-    if len(results) == 1:
-        oneResult_deleteEntry(results, fornavn_slett, etternavn_slett)
-    elif len(results) > 1:
-        multiResult_deleteEntry(results)
-    else:
-        print("Ingen personer funnet med dette navnet.")
+    if len(results) == 0:
+        print("Fant ingen personer med det navnet.")
         trykk_tast_for_meny()
+    elif len(results) == 1:
+        oneResult_deleteEntry(results, slett_fornavn, slett_etternavn)
+    else:
+        multiResult_deleteEntry(results)
 
 def endrePerson():
-    console_clear()
-    print("Endre en person i telefonkatalogen")
-    fornavn_endre = input("Skriv inn fornavn (skriv 'meny' for å gå tilbake): ").strip()
-    if fornavn_endre == "meny" or fornavn_endre == "MENY":
-        printMeny()
-    etternavn_endre = input("Skriv inn etternavn: ").strip()
-
-    cursor.execute("SELECT * FROM personer WHERE fornavn=? AND etternavn=?", (fornavn_endre, etternavn_endre))
+    fornavn_endre = input("Skriv fornavn på personen du vil endre: ")
+    etternavn_endre = input("Skriv etternavn på personen du vil endre: ")
+    cursor.execute("SELECT * FROM personer WHERE fornavn=%s AND etternavn=%s", (fornavn_endre, etternavn_endre))
     results = cursor.fetchall()
 
-    if len(results) == 1:
-        oneResult_changeEntry(results, fornavn_endre, etternavn_endre)
-    elif len(results) > 1:
-        multiResult_changeEntry(results)
-    else:
-        print("Ingen personer funnet med dette navnet.")
+    if len(results) == 0:
+        print("Fant ingen personer med det navnet.")
         trykk_tast_for_meny()
+    elif len(results) == 1:
+        oneResult_changeEntry(results, fornavn_endre, etternavn_endre)
+    else:
+        multiResult_changeEntry(results)
 
-# Start program
+# Start application
 printMeny()
